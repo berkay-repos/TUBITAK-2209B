@@ -6,6 +6,7 @@ import tensorflow as tf
 import gym_dubins_airplane
 import numpy as np
 import copy
+import argparse
 from time import sleep
 from utils import rearrangeticks
 from tensorflow.keras.models import Model
@@ -26,6 +27,13 @@ if len(gpus) > 0:
         tf.config.experimental.set_memory_growth(gpus[0], True)
     except RuntimeError:
         pass
+
+
+def get_args():
+    parser = argparse.ArgumentParser(description="Algorithm definitions")
+    parser.add_argument("-r", type=bool, default=False, help="rendering type")
+    parser.add_argument("-s", type=float, default=0, help="Speed buff")
+    return parser.parse_args()
 
 
 class Environment(Process):
@@ -317,7 +325,7 @@ class PPOAgent:
         return self.average[-1]
 
     def run_batch(self):  # train single agent against non-AI
-        done, score, SAVING, infos, average = False, 0, '', [], 0
+        done, score, _, infos, average = False, 0, '', [], 0
         self.info_list = ["win", "tie", "loss", "collision"]
         for episode in range(self.EPISODES):
             state = self.env.reset()
@@ -326,7 +334,9 @@ class PPOAgent:
             states, next_states, actions, rewards, predictions, dones, t, _ = [], [], [], [], [], [], 0, []
             info = "tie"
             while 1:
-                self.env.render()
+                if args.r:
+                    self.env.render()
+                sleep(args.s)
                 action, action_onehot, prediction = self.act(state)
                 foo = self.env._blueAC.get_sta()
                 bar = np.append(self.tacview, (foo[0], *foo[2]))
@@ -426,15 +436,15 @@ class PPOAgent:
             if self.episode >= self.EPISODES:
                 break
 
-        f = open("run_batch_multi_agent_training.out", 'w')
-        sys.stdout = f
-        ratios = [infos.count(t) / self.EPISODES * 100 for t in self.info_list]
-        res = {
-            self.info_list[i]: ratios[i]
-            for i in range(len(self.info_list))
-        }
-        print(res)
-        f.close()
+        # f = open("run_batch_multi_agent_training.out", 'w')
+        # sys.stdout = f
+        # ratios = [infos.count(t) / self.EPISODES * 100 for t in self.info_list]
+        # res = {
+        #     self.info_list[i]: ratios[i]
+        #     for i in range(len(self.info_list))
+        # }
+        # print(res)
+        # f.close()
         self.env.close()
 
     def test(self, test_episodes=100):  # Single agent test
@@ -510,6 +520,8 @@ class PPOAgent:
 
 
 if __name__ == "__main__":
+    args = get_args()
+
     env_name = 'dubinsAC-v0'
     agent = PPOAgent(env_name)
     agent.run_batch()  # train as PPO, train every batch, trains better
