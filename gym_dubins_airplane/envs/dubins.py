@@ -20,7 +20,7 @@ class DubinsEnv(gym.Env):
         self.viewer = None
         self._vel_mps = Config.vel_mps
         self._action_time_s = Config.action_time
-        self.hl_switch = 0
+        self.hl_switch = -2
         self.window_width = Config.window_width
         self.window_height = Config.window_height
         self.window_z = Config.window_z
@@ -29,40 +29,35 @@ class DubinsEnv(gym.Env):
         self.blue_health = Config.blue_health
         self.red_health = Config.red_health
         self.n_act = Config.n_act
-        self.red_bank_hold = Config.bank_hold
 
     def step(self, action):
         u = action2command(self._blueAC._vel_mps, action)
-        self._blueAC.takeaction(u[0], u[1], u[2], bank_mode=False)
-        self._redAC.takeaction(self._vel_mps, 0, 0, self.red_bank_hold)
+        self._blueAC.takeaction(u[0], u[1], u[2])
+        self._redAC.takeaction(self._vel_mps, 0, 0)
 
         # Red reflect
         if self._redAC._pos_m[0] > self.window_width:
-            self._redAC._heading_rad = np.pi - np.mod(self._redAC._heading_rad,
-                                                      2 * np.pi)
+            self._redAC._att[2] = np.pi - np.mod(self._redAC._att[2],
+                                                 2 * np.pi)
         elif self._redAC._pos_m[0] < 0:
-            self._redAC._heading_rad = np.pi - np.mod(self._redAC._heading_rad,
-                                                      2 * np.pi)
+            self._redAC._att[2] = np.pi - np.mod(self._redAC._att[2],
+                                                 2 * np.pi)
         if self._redAC._pos_m[1] > self.window_height:
-            self._redAC._heading_rad = -np.mod(self._redAC._heading_rad,
-                                               2 * np.pi)
+            self._redAC._att[2] = -np.mod(self._redAC._att[2], 2 * np.pi)
         elif self._redAC._pos_m[1] < 0:
-            self._redAC._heading_rad = -np.mod(self._redAC._heading_rad,
-                                               2 * np.pi)
+            self._redAC._att[2] = -np.mod(self._redAC._att[2], 2 * np.pi)
 
         # Blue reflect
         if self._blueAC._pos_m[0] > self.window_width:
-            self._blueAC._heading_rad = np.pi - np.mod(
-                self._blueAC._heading_rad, 2 * np.pi)
+            self._blueAC._att[1] = np.pi - np.mod(self._blueAC._att[1],
+                                                  2 * np.pi)
         elif self._blueAC._pos_m[0] < 0:
-            self._blueAC._heading_rad = np.pi - np.mod(
-                self._blueAC._heading_rad, 2 * np.pi)
+            self._blueAC._att[2] = np.pi - np.mod(self._blueAC._att[2],
+                                                  2 * np.pi)
         if self._blueAC._pos_m[1] > self.window_height:
-            self._blueAC._heading_rad = -np.mod(self._blueAC._heading_rad,
-                                                2 * np.pi)
+            self._blueAC._att[2] = -np.mod(self._blueAC._att[2], 2 * np.pi)
         elif self._blueAC._pos_m[1] < 0:
-            self._blueAC._heading_rad = -np.mod(self._blueAC._heading_rad,
-                                                2 * np.pi)
+            self._blueAC._att[2] = -np.mod(self._blueAC._att[2], 2 * np.pi)
 
         envSta = self.make_state(self._blueAC, self._redAC)
         reward, terminal, info = self.scalar_reward_terminal()
@@ -74,15 +69,15 @@ class DubinsEnv(gym.Env):
         self.blue_health = 0
         self.red_health = 0
         pos = [32 + random() * 218 for x in range(2)]
-        pos.append(random() * 200)
+        pos.append(random() * 800)
         self._redAC = ACEnvironment2D(position=pos,
-                                      vel_mps=self._vel_mps,
-                                      heading_deg=random() * 360)
+                                      att=[0, 0, random() * 360],
+                                      vel_mps=self._vel_mps)
         pos = [550 + random() * 218 for x in range(2)]
-        pos.append(random() * 200)
+        pos.append(random() * 800)
         self._blueAC = ACEnvironment2D(position=np.array(pos),
-                                       vel_mps=self._vel_mps,
-                                       heading_deg=random() * 360)
+                                       att=[0, 0, random() * 360],
+                                       vel_mps=self._vel_mps)
         return self.make_state(self._blueAC, self._redAC)
 
     def render(self, mode='human', close='False'):
@@ -97,12 +92,32 @@ class DubinsEnv(gym.Env):
                 (screen_width - self.window_width) // 2,
                 (screen_height - self.window_height) // 2)
             self.viewer.set_bounds(0, self.window_width, 0, self.window_height)
+            label = pyglet.text.Label('Hello, world',
+                                      font_name='Montserrat',
+                                      font_size=36,
+                                      x=400,
+                                      y=400,
+                                      anchor_x='center',
+                                      anchor_y='center')
+            label.draw()
 
-            # Quit signal
+            # Key presses
             @self.viewer.window.event
             def on_key_press(symbol, modifiers):
                 if symbol == pyglet.window.key.Q:
                     self.viewer.close()
+                if symbol == pyglet.window.key.UP:
+                    self._vel_mps += 1
+                if symbol == pyglet.window.key.DOWN:
+                    self._vel_mps -= 1
+                if symbol == pyglet.window.key.UP and modifiers & pyglet.window.key.MOD_SHIFT:
+                    self._redAC._att[1] += .2
+                if symbol == pyglet.window.key.DOWN and modifiers & pyglet.window.key.MOD_SHIFT:
+                    self._redAC._att[1] -= .2
+                if symbol == pyglet.window.key.RIGHT:
+                    self._redAC._att[0] += .2
+                if symbol == pyglet.window.key.LEFT:
+                    self._redAC._att[0] -= .2
 
         # Grid
         ystep = 5
@@ -114,12 +129,10 @@ class DubinsEnv(gym.Env):
             self.viewer.draw_line((foo, 0), (foo, self.window_height),
                                   color=(.8, .8, .8))
         for foo in np.linspace(0, self.window_height, ystep + 1):
-            test = self.viewer.draw_line((0, foo),
-                                         (self.window_width, foo))
+            test = self.viewer.draw_line((0, foo), (self.window_width, foo))
             test.linewidth.stroke = 2
         for foo in np.linspace(0, self.window_width, xstep + 1):
-            test = self.viewer.draw_line((foo, 0),
-                                         (foo, self.window_height))
+            test = self.viewer.draw_line((foo, 0), (foo, self.window_height))
             test.linewidth.stroke = 2
 
         # Red aircraft
@@ -132,9 +145,10 @@ class DubinsEnv(gym.Env):
         self.viewer.draw_polyline(
             ((24, 720), (24, 784), (40, 784), (40, 720), (24, 720)),
             filled=False)
+        baz = np.clip(dpos[2] - 400, -400, 400)
         z_red_level = self.viewer.draw_polygon(
-            ((24, 720), (24, 752 + dpos[2] / 800 * 32),
-             (40, 752 + dpos[2] / 800 * 32), (40, 720)))
+            ((24, 720), (24, 752 + baz / 400 * 32), (40, 752 + baz / 400 * 32),
+             (40, 720)))
         z_red_level._color.vec4 = (0.83, 0.13, 0.18, 0.8)
         red_ac_img.add_attr(jtransform)
         self.viewer.onetime_geoms.append(red_ac_img)
@@ -163,12 +177,10 @@ class DubinsEnv(gym.Env):
         self.viewer.draw_polyline(
             ((56, 720), (56, 784), (72, 784), (72, 720), (56, 720)),
             filled=False)
-        baz = apos[2] if abs(
-            apos[2]) < self.window_z else self.window_z * apos[2] / abs(
-                apos[2])
+        baz = np.clip(apos[2] - 400, -400, 400)
         z_blue_level = self.viewer.draw_polygon(
-            ((56, 720), (56, 752 + (baz - 400) / 400 * 32),
-             (71, 752 + (baz - 400) / 400 * 32), (71, 720)))
+            ((56, 720), (56, 752 + baz / 400 * 32), (71, 752 + baz / 400 * 32),
+             (71, 720)))
         z_blue_level._color.vec4 = (0.30, 0.65, 1.00, 0.8)
         blue_ac_img.add_attr(jtransform)
         self.viewer.onetime_geoms.append(blue_ac_img)
@@ -230,6 +242,7 @@ class DubinsEnv(gym.Env):
         errPos_defender = self.goal_pos_defender - dpos
         self.errPos = errPos
         self.errPos_defender = errPos_defender
+        posdiff = apos - dpos
         LOSxy = np.arctan2(errPos[1], errPos[0])
         LOSxy_defender = np.arctan2(errPos_defender[1], errPos_defender[0])
         posxy = np.linalg.norm(errPos[:2])
@@ -246,18 +259,14 @@ class DubinsEnv(gym.Env):
         AA_deg_defender = np.rad2deg(
             self._pi_bound(aatt_rad[1] - LOSxy_defender))
         self.qb = np.arccos(
-            np.clip(
-                ((-errPos_defender[0]) * np.cos(aatt_rad[2]) *
-                 np.cos(aatt_rad[1]) + -errPos_defender[1] *
-                 np.sin(aatt_rad[2]) * np.cos(aatt_rad[1]) -
-                 errPos_defender[2] * np.sin(aatt_rad[1])) / self.distance_,
-                -1.4, 1.4))
+            ((posdiff[0]) * np.cos(aatt_rad[2]) * np.cos(aatt_rad[1]) +
+             posdiff[1] * np.sin(aatt_rad[2]) * np.cos(aatt_rad[1]) +
+             posdiff[2] * np.sin(aatt_rad[1])) / self.distance_)
         self.qb_deg = np.rad2deg(self.qb)
         self.qr = np.arccos(
-            np.clip(((-errPos[0]) * np.cos(datt_rad[2]) * np.cos(datt_rad[1]) +
-                     -errPos[1] * np.sin(datt_rad[2]) * np.cos(datt_rad[1]) -
-                     errPos[2] * np.sin(datt_rad[1])) / self.distance_, -1.4,
-                    1.4))
+            ((-posdiff[0]) * np.cos(datt_rad[2]) * np.cos(datt_rad[1]) +
+             -posdiff[1] * np.sin(datt_rad[2]) * np.cos(datt_rad[1]) +
+             posdiff[2] * np.sin(datt_rad[1])) / self.distance_)
         self.qr_deg = np.rad2deg(self.qr)
         self.vel_diff = avel - dvel
         return np.array([
@@ -279,13 +288,12 @@ class DubinsEnv(gym.Env):
     def scalar_reward_terminal(self):
         terminal = False
 
+        reward_sca = 0
         # qr - qb
         if abs(self.qr_deg) >= 90:
             reward_sca = -np.exp(abs(self.qr_deg) / 1800)
         elif abs(self.qr_deg) < 90:
             reward_sca = np.exp(-abs(self.qr_deg))
-        print(self.qr_deg)
-        print(self.qb_deg)
         if abs(self.qb_deg) >= 90:
             reward_sca -= np.exp(abs(self.qb_deg) / 1800)
         elif abs(self.qb_deg) < 90:

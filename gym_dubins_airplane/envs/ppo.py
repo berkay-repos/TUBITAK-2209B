@@ -30,9 +30,10 @@ if len(gpus) > 0:
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description="Algorithm definitions")
-    parser.add_argument("-r", type=bool, default=False, help="rendering type")
-    parser.add_argument("-s", type=float, default=0, help="Speed buff")
+    parser = argparse.ArgumentParser(description="Following arguments are available.")
+    parser.add_argument("-r", "--render", action="store_true", help="rendering type")
+    parser.add_argument("-s", "--slowdown", type=str, help="Speed buff")
+    parser.add_argument("-t", "--test", action="store_true", help="Test the environment")
     return parser.parse_args()
 
 
@@ -190,16 +191,15 @@ class PPOAgent:
                                  action_space=self.action_size,
                                  lr=self.lr,
                                  optimizer=self.optimizer)
-        self.Actor_name = f"{self.env_name}_PPO_Actor.h5"
+        self.Actor_name = "actor.h5"
         self.Critic = Critic_Model(input_shape=self.state_size,
                                    action_space=self.action_size,
                                    lr=self.lr,
                                    optimizer=self.optimizer)
-        self.Critic_name = f"{self.env_name}_PPO_Critic.h5"
+        self.Critic_name = "critic.h5"
 
     def act(self, state):
         prediction = self.Actor.predict(state)[0]
-        print(prediction)
         action = np.random.choice(self.action_size, p=prediction)
         action_onehot = np.zeros([self.action_size])
         action_onehot[action] = 1
@@ -314,34 +314,45 @@ class PPOAgent:
             plt.savefig(self.env_name + ".png", bbox_inches='tight')
             plt.show()
         if self.average[-1] >= self.max_average:
+            np.savetxt("YARRA.csv", self.tacview[1:], fmt="%3.4f", delimiter=',')
             self.max_average = self.average[-1]
             self.save()
             # decreaate learning rate every saved model
-            self.lr *= 0.995
+            self.lr *= 0.994
             self.lr_list.append(self.lr)
             self.episodes_lr.append(episode)
             K.set_value(self.Actor.Actor.optimizer.learning_rate, self.lr)
             K.set_value(self.Critic.Critic.optimizer.learning_rate, self.lr)
         return self.average[-1]
 
-    def run_batch(self):  # train single agent against non-AI
+    def run_batch(self):
         done, score, _, infos, average = False, 0, '', [], 0
         self.info_list = ["win", "tie", "loss", "collision"]
+        args = get_args()
         for episode in range(self.EPISODES):
             state = self.env.reset()
-            self.tacview = np.empty((1, 6))
+            self.tacview = np.empty((1, 7))
             state = np.reshape(state, [1, self.state_size])
-            states, next_states, actions, rewards, predictions, dones, t, _ = [], [], [], [], [], [], 0, []
+            states, next_states, actions, rewards, predictions, dones = [], [], [], [], [], []
             info = "tie"
-            while 1:
-                if args.r:
+            for t in range(self.Training_batch):
+                if args.render:
                     self.env.render()
-                sleep(args.s)
+                if args.slowdown == "slow":
+                    sleep(.1)
+                elif args.slowdown == "fast":
+                    sleep(.025)
                 action, action_onehot, prediction = self.act(state)
-                foo = self.env._blueAC.get_sta()
-                bar = np.append(self.tacview, (foo[0], *foo[2]))
-                np.shape(bar)
                 next_state, reward, done, info = self.env.step(action)
+                foo = self.env._blueAC.get_sta()
+                foo[0][:2] /= 800
+                foo[0][:2] += 200
+                foo[0][2] += 2000
+                foo[2] = [np.rad2deg(x) for x in foo[2]]
+                foo[2][2] -= 90
+                foo[2][2] %= 360
+                # foo[2][2] = foo[2][2] - 360 if foo[2][2] > 180 else foo[2][2]
+                self.tacview = np.vstack((self.tacview, (t * .12, *foo[0], *foo[2])))
                 states.append(state)
                 next_states.append(
                     np.reshape(next_state, [1, self.state_size]))
@@ -351,31 +362,18 @@ class PPOAgent:
                 predictions.append(prediction)
                 state = np.reshape(next_state, [1, self.state_size])
                 score += reward
-                t += 1
-                if done:
+                if done or t == self.Training_batch - 1:
                     infos.append(info)
                     average = self.PlotModel(score, episode)
-                    if self.episode % 00 == 0:
+                    if self.episode % 100 == 0:
                         print(
                             f"episode: {episode}, score: {score}, average: {average:.{2}}"
                         )
                     state, done, score, _ = self.env.reset(), False, 0, ''
-                    state = np.reshape(state, [1, self.state_size[0]])
-                    print("600")
+                    state = np.reshape(state, [1, self.state_size])
                     break
             self.replay(states, actions, rewards, predictions, dones,
                         next_states)
-            if average >= 300:
-                print(
-                    f"\nEnvironment solved in {episode} episodes!\tAverage Score: {average:.{2}}"
-                )
-                break
-        ratios = [infos.count(t) / self.EPISODES * 99 for t in self.info_list]
-        res = {
-            self.info_list[i]: ratios[i]
-            for i in range(len(self.info_list))
-        }
-        print(res)
         self.env.close()
 
     def run_batch_multi(self):
@@ -452,20 +450,15 @@ class PPOAgent:
         e = 0  # Episode
         while 1:  # run until test ends
             state = self.env.reset()
-            state = np.reshape(state, [1, self.state_size[0]])
+            state = np.reshape(state, [1, self.state_size])
             score = 0
             # actions = ["acc", "decc", "right", "left"] # Available actions
             while 1:  # runs until done becomes true
                 self.env.render()
-                action = np.argmax(self.Actor.predict(state)[0])
+                action = np.argmax(self.Actor.predict(state))
                 # Check if action is acc or decc
-                if action == 0:
-                    print("Speed Up!")
-                elif action == 1:
-                    print("Slow Down!")
-                # print("action: ", actions[action]) # Print selected action
                 state, reward, done, info = self.env.step(action)
-                state = np.reshape(state, [1, self.state_size[0]])
+                state = np.reshape(state, [1, self.state_size])
                 score += reward
                 # done = False
                 if done:
@@ -521,10 +514,11 @@ class PPOAgent:
 
 if __name__ == "__main__":
     args = get_args()
-
     env_name = 'dubinsAC-v0'
     agent = PPOAgent(env_name)
-    agent.run_batch()  # train as PPO, train every batch, trains better
+    if args.test:
+        agent.test()
+    else:
+        agent.run_batch()  # train as PPO, train every batch, trains better
     # agent.run_batch_multi() # trains PPO in offline learning against PPO
-    # agent.test()
     # agent.test_multi() # test for multiple agents
