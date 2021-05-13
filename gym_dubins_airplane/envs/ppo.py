@@ -30,10 +30,17 @@ if len(gpus) > 0:
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description="Following arguments are available.")
-    parser.add_argument("-r", "--render", action="store_true", help="rendering type")
+    parser = argparse.ArgumentParser(
+        description="Following arguments are available.")
+    parser.add_argument("-r",
+                        "--render",
+                        action="store_true",
+                        help="rendering type")
     parser.add_argument("-s", "--slowdown", type=str, help="Speed buff")
-    parser.add_argument("-t", "--test", action="store_true", help="Test the environment")
+    parser.add_argument("-t",
+                        "--test",
+                        action="store_true",
+                        help="Test the environment")
     return parser.parse_args()
 
 
@@ -184,7 +191,7 @@ class PPOAgent:
         self.episodes_lr.append(0)
         self.epochs = 10  # training epochs
         self.shuffle = False
-        self.Training_batch = 500  # Org. 1000
+        self.Training_batch = 600  # Org. 1000
         self.optimizer = Adam
         self.scores, self.episodes, self.average, self.episodes_lr, self.lr_list = [], [], [], [], []
         self.Actor = Actor_Model(input_shape=self.state_size,
@@ -314,7 +321,6 @@ class PPOAgent:
             plt.savefig(self.env_name + ".png", bbox_inches='tight')
             plt.show()
         if self.average[-1] >= self.max_average:
-            np.savetxt("YARRA.csv", self.tacview[1:], fmt="%3.4f", delimiter=',')
             self.max_average = self.average[-1]
             self.save()
             # decreaate learning rate every saved model
@@ -325,13 +331,26 @@ class PPOAgent:
             K.set_value(self.Critic.Critic.optimizer.learning_rate, self.lr)
         return self.average[-1]
 
+    def tac_memory(self, t):
+        for idx, veh in enumerate((self.env._blueAC, self.env._redAC)):
+            pos, _, att, _ = veh.get_sta()
+            att[1] *= -1
+            att[0] *= -1
+            if idx == 0:
+                self.tacview_blue = np.vstack(
+                    (self.tacview_blue, (t * .12, *pos, *att)))
+            else:
+                self.tacview_red = np.vstack(
+                    (self.tacview_red, (t * .12, *pos, *att)))
+
     def run_batch(self):
         done, score, _, infos, average = False, 0, '', [], 0
         self.info_list = ["win", "tie", "loss", "collision"]
         args = get_args()
         for episode in range(self.EPISODES):
             state = self.env.reset()
-            self.tacview = np.empty((1, 7))
+            self.tacview_red = np.zeros(7)
+            self.tacview_blue = np.zeros(7)
             state = np.reshape(state, [1, self.state_size])
             states, next_states, actions, rewards, predictions, dones = [], [], [], [], [], []
             info = "tie"
@@ -344,18 +363,10 @@ class PPOAgent:
                     sleep(.025)
                 action, action_onehot, prediction = self.act(state)
                 next_state, reward, done, info = self.env.step(action)
-                foo = self.env._blueAC.get_sta()
-                foo[0][:2] /= 800
-                foo[0][:2] += 200
-                foo[0][2] += 2000
-                foo[2] = [np.rad2deg(x) for x in foo[2]]
-                foo[2][2] -= 90
-                foo[2][2] %= 360
-                # foo[2][2] = foo[2][2] - 360 if foo[2][2] > 180 else foo[2][2]
-                self.tacview = np.vstack((self.tacview, (t * .12, *foo[0], *foo[2])))
+                self.tac_memory(t)
                 states.append(state)
-                next_states.append(
-                    np.reshape(next_state, [1, self.state_size]))
+                next_states.append(np.reshape(next_state,
+                                              [1, self.state_size]))
                 actions.append(action_onehot)
                 rewards.append(reward)
                 dones.append(done)
@@ -363,6 +374,22 @@ class PPOAgent:
                 state = np.reshape(next_state, [1, self.state_size])
                 score += reward
                 if done or t == self.Training_batch - 1:
+                    np.savetxt(
+                        "red.csv",
+                        self.tacview_blue[1:],
+                        fmt="%3.4f",
+                        delimiter=',',
+                        header=
+                        "Time,Longitude,Latitude,Altitude,Roll,Pitch,Yaw",
+                        comments='')
+                    np.savetxt(
+                        "blue.csv",
+                        self.tacview_red,
+                        fmt="%3.4f",
+                        delimiter=',',
+                        header=
+                        "Time,Longitude,Latitude,Altitude,Roll,Pitch,Yaw",
+                        comments='')
                     infos.append(info)
                     average = self.PlotModel(score, episode)
                     if self.episode % 100 == 0:

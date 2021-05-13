@@ -19,7 +19,6 @@ class DubinsEnv(gym.Env):
     def __init__(self):
         self.viewer = None
         self._vel_mps = Config.vel_mps
-        self._action_time_s = Config.action_time
         self.hl_switch = -2
         self.window_width = Config.window_width
         self.window_height = Config.window_height
@@ -68,15 +67,11 @@ class DubinsEnv(gym.Env):
         self.hl_switch = 0
         self.blue_health = 0
         self.red_health = 0
-        pos = [32 + random() * 218 for x in range(2)]
-        pos.append(random() * 800)
-        self._redAC = ACEnvironment2D(position=pos,
-                                      att=[0, 0, random() * 360],
+        self._redAC = ACEnvironment2D(position=np.random.rand(3) * 800,
+                                      att=[0, 0, random() * 2 * np.pi],
                                       vel_mps=self._vel_mps)
-        pos = [550 + random() * 218 for x in range(2)]
-        pos.append(random() * 800)
-        self._blueAC = ACEnvironment2D(position=np.array(pos),
-                                       att=[0, 0, random() * 360],
+        self._blueAC = ACEnvironment2D(position=np.random.rand(3) * 800,
+                                       att=[0, 0, random() * 2 * np.pi],
                                        vel_mps=self._vel_mps)
         return self.make_state(self._blueAC, self._redAC)
 
@@ -92,14 +87,6 @@ class DubinsEnv(gym.Env):
                 (screen_width - self.window_width) // 2,
                 (screen_height - self.window_height) // 2)
             self.viewer.set_bounds(0, self.window_width, 0, self.window_height)
-            label = pyglet.text.Label('Hello, world',
-                                      font_name='Montserrat',
-                                      font_size=36,
-                                      x=400,
-                                      y=400,
-                                      anchor_x='center',
-                                      anchor_y='center')
-            label.draw()
 
             # Key presses
             @self.viewer.window.event
@@ -115,9 +102,9 @@ class DubinsEnv(gym.Env):
                 if symbol == pyglet.window.key.DOWN and modifiers & pyglet.window.key.MOD_SHIFT:
                     self._redAC._att[1] -= .2
                 if symbol == pyglet.window.key.RIGHT:
-                    self._redAC._att[0] += .2
+                    self._redAC._att[0] += .4
                 if symbol == pyglet.window.key.LEFT:
-                    self._redAC._att[0] -= .2
+                    self._redAC._att[0] -= .4
 
         # Grid
         ystep = 5
@@ -137,7 +124,7 @@ class DubinsEnv(gym.Env):
 
         # Red aircraft
         dpos, _, datt_rad, dpos_hist = self._redAC.get_sta()
-        red_ac_img = rendering.Image('images/f16_red.png', 48, 48)
+        red_ac_img = rendering.Image('envs/images/f16_red.png', 48, 48)
         red_ac_img._color.vec4 = (1, 1, 1, 1)
         jtransform = rendering.Transform(rotation=-datt_rad[2],
                                          translation=np.array(
@@ -169,7 +156,7 @@ class DubinsEnv(gym.Env):
         self.viewer.draw_polyline(apos_hist[-50:, [-2, -3]],
                                   color=(0.00, 0.28, 0.73),
                                   linewidth=1.5)
-        blue_ac_img = rendering.Image('images/f16_blue.png', 48, 48)
+        blue_ac_img = rendering.Image('envs/images/f16_blue.png', 48, 48)
         blue_ac_img._color.vec4 = (1, 1, 1, 1)
         jtransform = rendering.Transform(rotation=-aatt_rad[2],
                                          translation=np.array(
@@ -229,56 +216,49 @@ class DubinsEnv(gym.Env):
     def make_state(self, attacker, defender):
         apos, avel, aatt_rad, _ = attacker.get_sta()
         dpos, dvel, datt_rad, _ = defender.get_sta()
+        self.distance_ = np.linalg.norm(apos - dpos)
         self.apos = apos
         self.dpos = dpos
-        self.goal_pos = np.array(
-            (dpos[0] - 30 * cos(datt_rad[2]), dpos[1] - 30 * sin(datt_rad[2]),
-             dpos[2] - 30 * cos(datt_rad[1])))
-        self.goal_pos_defender = np.array(
-            (apos[0] - 30 * cos(aatt_rad[2]), apos[1] - 30 * sin(aatt_rad[2]),
-             apos[2] - 30 * cos(aatt_rad[1])))
-        self.distance_ = np.linalg.norm(apos - dpos)
-        errPos = self.goal_pos - apos
-        errPos_defender = self.goal_pos_defender - dpos
-        self.errPos = errPos
-        self.errPos_defender = errPos_defender
+        self.goal_pos = dpos
+        self.goal_pos_defender = apos
+        self.errPos = self.goal_pos - apos
+        self.errPos_defender = self.goal_pos_defender - dpos
         posdiff = apos - dpos
-        LOSxy = np.arctan2(errPos[1], errPos[0])
-        LOSxy_defender = np.arctan2(errPos_defender[1], errPos_defender[0])
-        posxy = np.linalg.norm(errPos[:2])
-        posxy_defender = np.linalg.norm(errPos_defender[:2])
-        LOSz = np.arctan2(errPos[2], posxy)
-        LOSz_defender = np.arctan2(errPos_defender[2], posxy_defender)
-        ATAxy_deg = np.rad2deg(self._pi_bound(LOSxy - aatt_rad[1]))
-        ATAz_deg = np.rad2deg(self._pi_bound(LOSz - aatt_rad[0]))
-        AA_deg = np.rad2deg(self._pi_bound(datt_rad[1] - LOSxy))
-        ATAxy_deg_defender = np.rad2deg(
-            self._pi_bound(LOSxy_defender - datt_rad[1]))
-        ATAz_deg_defender = np.rad2deg(
-            self._pi_bound(LOSz_defender - datt_rad[0]))
-        AA_deg_defender = np.rad2deg(
-            self._pi_bound(aatt_rad[1] - LOSxy_defender))
+
+        LOSxy = np.arctan2(self.errPos[1], self.errPos[0])
+        LOSxy_defender = np.arctan2(self.errPos_defender[1],
+                                    self.errPos_defender[0])
+        posxy = np.linalg.norm(self.errPos[:2])
+        posxy_defender = np.linalg.norm(self.errPos_defender[:2])
+        LOSz = np.arctan2(self.errPos[2], posxy)
+        LOSz_defender = np.arctan2(self.errPos_defender[2], posxy_defender)
+        self.ATAxy_deg = np.rad2deg(self._pi_bound(-LOSxy + aatt_rad[2]))
+        self.ATAz_deg = np.rad2deg(self._pi_bound(LOSz - aatt_rad[1]))
+        self.AA_deg = np.rad2deg(self._pi_bound(datt_rad[2] - LOSxy))
+        self.ATAxy_deg_defender = np.rad2deg(
+            self._pi_bound(-LOSxy_defender + datt_rad[2]))
+        self.ATAz_deg_defender = np.rad2deg(
+            self._pi_bound(LOSz_defender - datt_rad[1]))
+        self.AA_deg_defender = np.rad2deg(
+            self._pi_bound(aatt_rad[2] - LOSxy_defender))
         self.qb = np.arccos(
-            ((posdiff[0]) * np.cos(aatt_rad[2]) * np.cos(aatt_rad[1]) +
+            ((-posdiff[0]) * np.cos(aatt_rad[2]) * np.cos(aatt_rad[1]) -
              posdiff[1] * np.sin(aatt_rad[2]) * np.cos(aatt_rad[1]) +
              posdiff[2] * np.sin(aatt_rad[1])) / self.distance_)
         self.qb_deg = np.rad2deg(self.qb)
         self.qr = np.arccos(
-            ((-posdiff[0]) * np.cos(datt_rad[2]) * np.cos(datt_rad[1]) +
-             -posdiff[1] * np.sin(datt_rad[2]) * np.cos(datt_rad[1]) +
+            ((posdiff[0]) * np.cos(datt_rad[2]) * np.cos(datt_rad[1]) +
+             posdiff[1] * np.sin(datt_rad[2]) * np.cos(datt_rad[1]) -
              posdiff[2] * np.sin(datt_rad[1])) / self.distance_)
         self.qr_deg = np.rad2deg(self.qr)
         self.vel_diff = avel - dvel
+
         return np.array([
-            errPos[0], errPos[1], errPos[2],
+            self.errPos[0], self.errPos[1], self.errPos[2],
             np.rad2deg(self._pi_bound(LOSxy)),
-            np.rad2deg(self._pi_bound(LOSz)),
-            self._pi_bound(ATAxy_deg),
-            self._pi_bound(ATAz_deg),
-            self._pi_bound(AA_deg),
-            self._pi_bound(ATAxy_deg_defender),
-            self._pi_bound(ATAz_deg_defender),
-            self._pi_bound(AA_deg_defender),
+            np.rad2deg(self._pi_bound(LOSz)), self.ATAxy_deg, self.ATAz_deg,
+            self.AA_deg, self.ATAxy_deg_defender, self.ATAz_deg_defender,
+            self.AA_deg_defender,
             np.rad2deg(aatt_rad[0]),
             np.rad2deg(aatt_rad[1]),
             np.rad2deg(aatt_rad[2]), self.vel_diff, self.qr_deg, self.qb_deg
@@ -287,7 +267,6 @@ class DubinsEnv(gym.Env):
 
     def scalar_reward_terminal(self):
         terminal = False
-
         reward_sca = 0
         # qr - qb
         if abs(self.qr_deg) >= 90:
