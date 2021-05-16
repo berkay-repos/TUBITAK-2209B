@@ -8,7 +8,6 @@ class ACEnvironment2D:
                  position=np.array([0., 0., 0]),
                  att=np.array([0., 0., 0]),
                  vel_mps=0):
-
         self.reset()
         self._pos_m = position
         self._pos_history[0, :] = position

@@ -323,7 +323,7 @@ class PPOAgent:
         if self.average[-1] >= self.max_average:
             self.max_average = self.average[-1]
             self.save()
-            # decreaate learning rate every saved model
+            # decrease learning rate every saved model
             self.lr *= 0.994
             self.lr_list.append(self.lr)
             self.episodes_lr.append(episode)
@@ -334,14 +334,13 @@ class PPOAgent:
     def tac_memory(self, t):
         for idx, veh in enumerate((self.env._blueAC, self.env._redAC)):
             pos, _, att, _ = veh.get_sta()
-            att[1] *= -1
-            att[0] *= -1
+            att[2] *= -1
+            att[1] += np.pi / 2
+            bar = (pos[1], pos[0], pos[2], att[1], att[0], att[2])
             if idx == 0:
-                self.tacview_blue = np.vstack(
-                    (self.tacview_blue, (t * .12, *pos, *att)))
+                self.tacview_blue = np.vstack((self.tacview_blue, bar))
             else:
-                self.tacview_red = np.vstack(
-                    (self.tacview_red, (t * .12, *pos, *att)))
+                self.tacview_red = np.vstack((self.tacview_red, bar))
 
     def run_batch(self):
         done, score, _, infos, average = False, 0, '', [], 0
@@ -349,8 +348,8 @@ class PPOAgent:
         args = get_args()
         for episode in range(self.EPISODES):
             state = self.env.reset()
-            self.tacview_red = np.zeros(7)
-            self.tacview_blue = np.zeros(7)
+            self.tacview_red = np.zeros(6)
+            self.tacview_blue = np.zeros(6)
             state = np.reshape(state, [1, self.state_size])
             states, next_states, actions, rewards, predictions, dones = [], [], [], [], [], []
             info = "tie"
@@ -376,20 +375,18 @@ class PPOAgent:
                 if done or t == self.Training_batch - 1:
                     np.savetxt(
                         "red.csv",
+                        self.tacview_red[1:],
+                        fmt="%3.4f",
+                        delimiter=',',
+                        header="Longitude, Latitude, Altitude, Roll, Pitch, Yaw"
+                    )
+                    np.savetxt(
+                        "blue.csv",
                         self.tacview_blue[1:],
                         fmt="%3.4f",
                         delimiter=',',
-                        header=
-                        "Time,Longitude,Latitude,Altitude,Roll,Pitch,Yaw",
-                        comments='')
-                    np.savetxt(
-                        "blue.csv",
-                        self.tacview_red,
-                        fmt="%3.4f",
-                        delimiter=',',
-                        header=
-                        "Time,Longitude,Latitude,Altitude,Roll,Pitch,Yaw",
-                        comments='')
+                        header="Longitude, Latitude, Altitude, Roll, Pitch, Yaw"
+                    )
                     infos.append(info)
                     average = self.PlotModel(score, episode)
                     if self.episode % 100 == 0:

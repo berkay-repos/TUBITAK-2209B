@@ -270,7 +270,7 @@ class DubinsEnv(gym.Env):
         reward_sca = 0
         # qr - qb
         if abs(self.qr_deg) >= 90:
-            reward_sca = -np.exp(abs(self.qr_deg) / 1800)
+            reward_sca = -2.286 / 10**-6 * self.qr_deg**3 + 0.0001533 * self.qr_deg**2 + -0.02127 * self.qr_deg + 0.07088
         elif abs(self.qr_deg) < 90:
             reward_sca = np.exp(-abs(self.qr_deg))
         if abs(self.qb_deg) >= 90:

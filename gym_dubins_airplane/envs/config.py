@@ -4,7 +4,7 @@ import numpy as np
 class Config:
     EPISODES = 10000  # number of episodes
     vel_mps = 50  # velocity of aircrafts
-    action_time = .4  # action delta T
+    action_time = .1  # action delta T
     action_size = 4  # number of discrete actions
 
     max_bank = 70  # maximum bank angle in deg
