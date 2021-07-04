@@ -1,0 +1,8 @@
+LICENSE
+README.md
+setup.py
+liftup8.egg-info/PKG-INFO
+liftup8.egg-info/SOURCES.txt
+liftup8.egg-info/dependency_links.txt
+liftup8.egg-info/requires.txt
+liftup8.egg-info/top_level.txt
