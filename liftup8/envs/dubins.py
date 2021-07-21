@@ -1,4 +1,3 @@
-import os
 import pyglet
 import gym
 import numpy as np
@@ -8,9 +7,6 @@ from gym.envs.classic_control import rendering
 from config import Config
 from ACEnvironment import ACEnvironment2D
 from act_cmd import action2command
-
-__location__ = os.path.realpath(
-    os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
 
 class DubinsEnv(gym.Env):
@@ -124,7 +120,7 @@ class DubinsEnv(gym.Env):
 
         # Red aircraft
         dpos, _, datt_rad, dpos_hist = self._redAC.get_sta()
-        red_ac_img = rendering.Image('envs/images/f16_red.png', 48, 48)
+        red_ac_img = rendering.Image('./envs/images/f16_red.png', 48, 48)
         red_ac_img._color.vec4 = (1, 1, 1, 1)
         jtransform = rendering.Transform(rotation=-datt_rad[2],
                                          translation=np.array(
@@ -156,7 +152,7 @@ class DubinsEnv(gym.Env):
         self.viewer.draw_polyline(apos_hist[-50:, [-2, -3]],
                                   color=(0.00, 0.28, 0.73),
                                   linewidth=1.5)
-        blue_ac_img = rendering.Image('envs/images/f16_blue.png', 48, 48)
+        blue_ac_img = rendering.Image('./envs/images/f16_blue.png', 48, 48)
         blue_ac_img._color.vec4 = (1, 1, 1, 1)
         jtransform = rendering.Transform(rotation=-aatt_rad[2],
                                          translation=np.array(

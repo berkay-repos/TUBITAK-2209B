@@ -1,4 +1,5 @@
 import numpy as np
+import jsbsim
 from math import sin, cos, tan
 from config import Config
 
@@ -20,17 +21,41 @@ class ACEnvironment2D:
         self.max_pitch = Config.max_pitch
         self.roll_rate = Config.roll_rate
         self.pitch_rate = Config.pitch_rate
+        self.exec = jsbsim.FGFDMExec('./jsbsim/', None)
+        self.exec.set_debug_level(0)
+        self.exec.load_model("f16")
+        self.exec.set_dt(Config.action_time)
+        self.path = []
 
-    def reset(self):
-        self._pos_m = np.zeros((1, 3), dtype=float)
-        self._att = np.zeros((1, 3), dtype=float)
-        self._pos_history = np.zeros((1, 3), dtype=float)
-        self._vel_mps = 0.
+    def reset(self, USE_JSBSIM=False):
+        if USE_JSBSIM:
+            self.exec.set_property_value('ic/h-sl-ft', 8.42)
+            self.exec.set_property_value('ic/terrain-elevation-ft', 8.42)
+            self.exec.set_property_value('ic/h-agl-ft', 8.42)
+            self.exec.set_property_value('ic/long-gc-deg', 1.37211666700005708)
+            # geocentrique (angle depuis le centre de la terre)
+            self.exec.set_property_value('ic/lat-gc-deg', 43.6189638890000424)
+            # geodesique
+            # self.exec.set_property_value('ic/lat-geod-deg', 43.6189638890000424)
+            self.exec.set_property_value('ic/u-fps', 11.8147)
+            self.exec.set_property_value('ic/v-fps', 0)
+            self.exec.set_property_value('ic/w-fps', 0)
+            self.exec.set_property_value('ic/p-rad_sec', 0)
+            self.exec.set_property_value('ic/q-rad_sec', 0)
+            self.exec.set_property_value('ic/r-rad_sec', 0)
+            self.exec.set_property_value('ic/roc-fpm', 0)
+            self.exec.set_property_value('ic/psi-true-deg', 0)
+            self.exec.run_ic()
+        else:
+            self._pos_m = np.zeros((1, 3), dtype=float)
+            self._att = np.zeros((1, 3), dtype=float)
+            self._pos_history = np.zeros((1, 3), dtype=float)
+            self._vel_mps = 0.
 
-        # Should we use different dt for different commands or same?
-        self._tau_flightpath_s = 0.05
-        self._tau_vel_s = 0.1
-        self._bank_tau = 0.2
+            # Should we use different dt for different commands or same?
+            self._tau_flightpath_s = 0.05
+            self._tau_vel_s = 0.1
+            self._bank_tau = 0.2
 
     def get_sta(self):
         return self._pos_m.copy(), self._vel_mps, self._att.copy(

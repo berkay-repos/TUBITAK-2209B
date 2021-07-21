@@ -5,8 +5,8 @@ import random
 
 class Aircraft:
     def __init__(self):
-        self.exec = jsbsim.FGFDMExec('./jsbsim/', None)
-        self.exec.set_debug_level(0)
+        self.exec = jsbsim.FGFDMExec('./envs/jsbsim/', None)
+        self.exec.set_debug_level(8)
         self.exec.load_model("f16")
         self.exec.set_dt(1.0 / 60.)
         self.path = []
@@ -91,7 +91,7 @@ class Bomber:
             self.exec = None
             del self.exec  # This one is removing the crash
 
-        self.exec = jsbsim.FGFDMExec('./jsbsim/', None)
+        self.exec = jsbsim.FGFDMExec('./envs/jsbsim/', None)
 
         self.exec.set_debug_level(0)
         self.exec.load_model("f16")
